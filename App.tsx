@@ -1,4 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import SignIn from './pages/SignIn';
+import SignUp from './pages/SignUp';
+import ProtectedRoute from './components/ProtectedRoute';
 import { ShoppingCart, ShieldCheck, ChevronRight, CheckCircle2, Package, ArrowLeft, BarChart3, Truck, TicketPercent, GraduationCap, Gift, Zap } from 'lucide-react';
 import { BUILD_TIERS, ASSEMBLY_FEE, TAX_RATE } from './constants';
 import { BuildTier, ComponentType, PCComponent, AppStep, UserConfiguration } from './types';
@@ -6,7 +10,7 @@ import { ComponentCard } from './components/ComponentCard';
 import { GeminiAdvisor } from './components/GeminiAdvisor';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
-function App() {
+function MainApp() {
   const [step, setStep] = useState<AppStep>('home');
   const [selectedTier, setSelectedTier] = useState<BuildTier | null>(null);
   const [userConfig, setUserConfig] = useState<UserConfiguration>({
@@ -17,7 +21,7 @@ function App() {
   // Calculate current build based on tier + user overrides
   const currentBuild = useMemo(() => {
     if (!selectedTier) return [];
-    
+
     // Replace base components with user config if type matches
     return selectedTier.baseBuild.map(comp => {
       if (comp.type === ComponentType.RAM && userConfig.ram.id) return userConfig.ram;
@@ -39,7 +43,7 @@ function App() {
     // Initialize config with base parts
     const baseRam = tier.baseBuild.find(c => c.type === ComponentType.RAM);
     const baseStorage = tier.baseBuild.find(c => c.type === ComponentType.STORAGE);
-    
+
     if (baseRam && baseStorage) {
       setUserConfig({ ram: baseRam, storage: baseStorage });
     }
@@ -71,7 +75,7 @@ function App() {
       <p className="text-lg md:text-xl text-slate-600 max-w-2xl">
         Stop paying for hidden compromises. Choose your budget and get the best possible components with full transparency.
       </p>
-      <button 
+      <button
         onClick={() => setStep('budget')}
         className="group flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-blue-500/25 z-10"
       >
@@ -81,9 +85,9 @@ function App() {
 
       {/* Hero Image */}
       <div className="w-full max-w-5xl rounded-2xl overflow-hidden shadow-2xl border border-slate-200 mt-6 relative group">
-        <img 
-          src="https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&q=80&w=2042" 
-          alt="Premium Gaming PC Setup" 
+        <img
+          src="https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&q=80&w=2042"
+          alt="Premium Gaming PC Setup"
           className="w-full h-auto object-cover max-h-[400px] transition-transform duration-700 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent flex items-end">
@@ -93,7 +97,7 @@ function App() {
           </div>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12 w-full max-w-5xl">
         {[
           { icon: <CheckCircle2 className="text-green-500" />, title: "No Hidden Junk", desc: "No generic PSUs or motherboards. We list every exact model." },
@@ -116,7 +120,7 @@ function App() {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Offer 1 */}
-          <div 
+          <div
             onClick={() => setStep('budget')}
             className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-2xl p-6 text-white relative overflow-hidden shadow-lg group cursor-pointer hover:shadow-indigo-500/30 transition-all hover:-translate-y-1"
           >
@@ -134,11 +138,11 @@ function App() {
           </div>
 
           {/* Offer 2 */}
-          <div 
+          <div
             onClick={() => setStep('budget')}
             className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl p-6 text-white relative overflow-hidden shadow-lg group cursor-pointer hover:shadow-pink-500/30 transition-all hover:-translate-y-1"
           >
-             <div className="relative z-10">
+            <div className="relative z-10">
               <div className="flex items-center gap-2 mb-2 bg-white/20 w-fit px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm">
                 <Gift size={14} /> LIMITED TIME
               </div>
@@ -162,14 +166,14 @@ function App() {
       </button>
       <h2 className="text-3xl font-bold text-slate-900 mb-2">Select your Budget Range</h2>
       <p className="text-slate-500 mb-10">We have optimized the best possible value for every tier.</p>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {BUILD_TIERS.map(tier => {
           // Find the case image for the preview
           const caseImage = tier.baseBuild.find(c => c.type === ComponentType.CASE)?.image;
 
           return (
-            <div 
+            <div
               key={tier.id}
               onClick={() => handleTierSelect(tier)}
               className="group relative cursor-pointer bg-white rounded-2xl p-6 border-2 border-slate-100 hover:border-blue-500 transition-all hover:shadow-xl hover:-translate-y-1 flex flex-col"
@@ -190,14 +194,14 @@ function App() {
               <div className="flex-1">
                 <h3 className="text-2xl font-bold text-slate-900 mb-2">{tier.name}</h3>
                 <p className="text-slate-600 text-sm leading-relaxed mb-6">{tier.description}</p>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center text-sm text-slate-700">
-                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-3 text-blue-600 shrink-0"><BarChart3 size={16}/></div>
+                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-3 text-blue-600 shrink-0"><BarChart3 size={16} /></div>
                     <span className="truncate"><strong>CPU:</strong> {tier.baseBuild.find(c => c.type === ComponentType.CPU)?.name}</span>
                   </div>
                   <div className="flex items-center text-sm text-slate-700">
-                    <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center mr-3 text-purple-600 shrink-0"><BarChart3 size={16}/></div>
+                    <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center mr-3 text-purple-600 shrink-0"><BarChart3 size={16} /></div>
                     <span className="truncate"><strong>GPU:</strong> {tier.baseBuild.find(c => c.type === ComponentType.GPU)?.name}</span>
                   </div>
                 </div>
@@ -232,11 +236,11 @@ function App() {
               const isRam = comp.type === ComponentType.RAM;
               const isStorage = comp.type === ComponentType.STORAGE;
               const isConfigurable = isRam || isStorage;
-              
+
               return (
-                <ComponentCard 
-                  key={comp.type} 
-                  component={comp} 
+                <ComponentCard
+                  key={comp.type}
+                  component={comp}
                   isConfigurable={isConfigurable}
                   options={isRam ? selectedTier?.upgrades[ComponentType.RAM] : isStorage ? selectedTier?.upgrades[ComponentType.STORAGE] : undefined}
                   onSelect={(c) => handleConfigChange(isRam ? 'ram' : 'storage', c)}
@@ -268,9 +272,9 @@ function App() {
                 <span>GST (18%)</span>
                 <span>₹{pricing.gst.toLocaleString()}</span>
               </div>
-              
+
               <div className="h-px bg-slate-200 my-4"></div>
-              
+
               <div className="flex justify-between items-end">
                 <span className="font-bold text-slate-900">Total Price</span>
                 <span className="text-2xl font-bold text-blue-600">₹{pricing.total.toLocaleString()}</span>
@@ -303,14 +307,14 @@ function App() {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={() => setStep('checkout')}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-lg font-bold text-lg shadow-md transition-all mt-4 flex items-center justify-center gap-2"
               >
                 Proceed to Checkout
                 <ChevronRight size={20} />
               </button>
-              
+
               <p className="text-xs text-center text-slate-400 mt-2">
                 Estimated Delivery: 5-7 Business Days
               </p>
@@ -323,22 +327,22 @@ function App() {
 
   const renderCheckout = () => (
     <div className="flex items-center justify-center min-h-[60vh] px-4 animate-fade-in">
-       <div className="text-center max-w-lg">
-         <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-           <Truck size={40} />
-         </div>
-         <h2 className="text-3xl font-bold text-slate-900 mb-4">Ready to Ship!</h2>
-         <p className="text-slate-600 mb-8">
-           This is a demo application. In a real scenario, you would be redirected to a payment gateway for 
-           <span className="font-bold text-slate-900"> ₹{pricing.total.toLocaleString()}</span>.
-         </p>
-         <button 
-           onClick={() => setStep('home')}
-           className="bg-slate-900 text-white px-8 py-3 rounded-lg font-medium hover:bg-slate-800 transition-colors"
-         >
-           Back to Home
-         </button>
-       </div>
+      <div className="text-center max-w-lg">
+        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Truck size={40} />
+        </div>
+        <h2 className="text-3xl font-bold text-slate-900 mb-4">Ready to Ship!</h2>
+        <p className="text-slate-600 mb-8">
+          This is a demo application. In a real scenario, you would be redirected to a payment gateway for
+          <span className="font-bold text-slate-900"> ₹{pricing.total.toLocaleString()}</span>.
+        </p>
+        <button
+          onClick={() => setStep('home')}
+          className="bg-slate-900 text-white px-8 py-3 rounded-lg font-medium hover:bg-slate-800 transition-colors"
+        >
+          Back to Home
+        </button>
+      </div>
     </div>
   );
 
@@ -350,21 +354,21 @@ function App() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setStep('home')}>
-             <div className="bg-blue-600 text-white p-1.5 rounded-lg">
-               <ShieldCheck size={20} />
-             </div>
-             <span className="font-bold text-xl tracking-tight text-slate-900">HonestPC</span>
+            <div className="bg-blue-600 text-white p-1.5 rounded-lg">
+              <ShieldCheck size={20} />
+            </div>
+            <span className="font-bold text-xl tracking-tight text-slate-900">HonestPC</span>
           </div>
           <div className="flex items-center gap-4">
-             {selectedTier && step !== 'home' && (
-               <div className="hidden sm:block text-xs font-medium bg-slate-100 px-3 py-1 rounded-full text-slate-600">
-                 Current Build: {selectedTier.name}
-               </div>
-             )}
-             <button className="relative p-2 text-slate-500 hover:text-blue-600 transition-colors">
-                <ShoppingCart size={24} />
-                {step === 'config' && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
-             </button>
+            {selectedTier && step !== 'home' && (
+              <div className="hidden sm:block text-xs font-medium bg-slate-100 px-3 py-1 rounded-full text-slate-600">
+                Current Build: {selectedTier.name}
+              </div>
+            )}
+            <button className="relative p-2 text-slate-500 hover:text-blue-600 transition-colors">
+              <ShoppingCart size={24} />
+              {step === 'config' && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
+            </button>
           </div>
         </div>
       </header>
@@ -382,6 +386,20 @@ function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<SignIn />} />
+      <Route path="/signup" element={<SignUp />} />
+      <Route path="/*" element={
+        <ProtectedRoute>
+          <MainApp />
+        </ProtectedRoute>
+      } />
+    </Routes>
   );
 }
 
