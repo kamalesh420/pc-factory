@@ -1,9 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
+import MyBuilds from './pages/MyBuilds';
+import MyOrders from './pages/MyOrders';
 import ProtectedRoute from './components/ProtectedRoute';
-import { ShoppingCart, ShieldCheck, ChevronRight, CheckCircle2, Package, ArrowLeft, BarChart3, Truck, TicketPercent, GraduationCap, Gift, Zap } from 'lucide-react';
+import { useAuth } from './context/AuthContext';
+import { saveBuild } from './services/buildsService';
+import { createOrder, Address } from './services/ordersService';
+import { ShoppingCart, ShieldCheck, ChevronRight, CheckCircle2, Package, ArrowLeft, BarChart3, Truck, TicketPercent, GraduationCap, Gift, Zap, Save, User, LogOut, FolderOpen, ClipboardList, X, Loader2 } from 'lucide-react';
 import { BUILD_TIERS, ASSEMBLY_FEE, TAX_RATE } from './constants';
 import { BuildTier, ComponentType, PCComponent, AppStep, UserConfiguration } from './types';
 import { ComponentCard } from './components/ComponentCard';
@@ -11,12 +16,56 @@ import { GeminiAdvisor } from './components/GeminiAdvisor';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 function MainApp() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, userData, logout } = useAuth();
+
   const [step, setStep] = useState<AppStep>('home');
   const [selectedTier, setSelectedTier] = useState<BuildTier | null>(null);
   const [userConfig, setUserConfig] = useState<UserConfiguration>({
     ram: {} as PCComponent,
     storage: {} as PCComponent
   });
+
+  // Modal states
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [buildName, setBuildName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  // User menu state
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Checkout form state
+  const [checkoutForm, setCheckoutForm] = useState({
+    street: '',
+    city: '',
+    state: '',
+    pincode: '',
+    phone: ''
+  });
+  const [ordering, setOrdering] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState<{ orderRef: string } | null>(null);
+
+  // Load build from navigation state (from My Builds page)
+  useEffect(() => {
+    if (location.state?.loadBuild) {
+      const build = location.state.loadBuild;
+      const tier = BUILD_TIERS.find(t => t.id === build.tierId);
+      if (tier) {
+        setSelectedTier(tier);
+        // Find matching RAM and storage from build components
+        const ramComp = build.components.find((c: PCComponent) => c.type === ComponentType.RAM);
+        const storageComp = build.components.find((c: PCComponent) => c.type === ComponentType.STORAGE);
+        if (ramComp && storageComp) {
+          setUserConfig({ ram: ramComp, storage: storageComp });
+        }
+        setStep('config');
+      }
+      // Clear the state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   // Calculate current build based on tier + user overrides
   const currentBuild = useMemo(() => {
@@ -35,7 +84,7 @@ function MainApp() {
     const subtotal = partsTotal + ASSEMBLY_FEE;
     const gst = subtotal * TAX_RATE;
     const total = subtotal + gst;
-    return { partsTotal, subtotal, gst, total };
+    return { partsTotal, assemblyFee: ASSEMBLY_FEE, gst, total };
   }, [currentBuild]);
 
   const handleTierSelect = (tier: BuildTier) => {
@@ -52,6 +101,86 @@ function MainApp() {
 
   const handleConfigChange = (type: 'ram' | 'storage', component: PCComponent) => {
     setUserConfig(prev => ({ ...prev, [type]: component }));
+  };
+
+  // Save build handler
+  const handleSaveBuild = async () => {
+    if (!user || !selectedTier || !buildName.trim()) {
+      setSaveError('Please enter a build name');
+      return;
+    }
+
+    setSaving(true);
+    setSaveError('');
+
+    try {
+      await saveBuild(user.uid, {
+        name: buildName.trim(),
+        tierId: selectedTier.id,
+        tierName: selectedTier.name,
+        components: currentBuild,
+        pricing
+      });
+      setShowSaveModal(false);
+      setBuildName('');
+      alert('Build saved successfully!');
+    } catch (err) {
+      console.error('Error saving build:', err);
+      setSaveError('Failed to save build. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Order handler
+  const handlePlaceOrder = async () => {
+    if (!user || !userData || !selectedTier) return;
+
+    // Validate form
+    if (!checkoutForm.street || !checkoutForm.city || !checkoutForm.state || !checkoutForm.pincode || !checkoutForm.phone) {
+      alert('Please fill in all shipping details');
+      return;
+    }
+
+    setOrdering(true);
+
+    try {
+      const shippingAddress: Address = {
+        street: checkoutForm.street,
+        city: checkoutForm.city,
+        state: checkoutForm.state,
+        pincode: checkoutForm.pincode
+      };
+
+      const order = await createOrder({
+        userId: user.uid,
+        userEmail: user.email || '',
+        userName: userData.name || 'Customer',
+        tierId: selectedTier.id,
+        tierName: selectedTier.name,
+        components: currentBuild,
+        pricing,
+        shippingAddress,
+        phone: checkoutForm.phone
+      });
+
+      setOrderSuccess({ orderRef: order.orderRef });
+      setStep('success');
+    } catch (err) {
+      console.error('Error placing order:', err);
+      alert('Failed to place order. Please try again.');
+    } finally {
+      setOrdering(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
   };
 
   const costData = [
@@ -307,9 +436,17 @@ function MainApp() {
                 </div>
               </div>
 
+              {/* Save Build Button */}
+              <button
+                onClick={() => setShowSaveModal(true)}
+                className="w-full flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-lg font-medium transition-colors"
+              >
+                <Save size={18} /> Save Build
+              </button>
+
               <button
                 onClick={() => setStep('checkout')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-lg font-bold text-lg shadow-md transition-all mt-4 flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-lg font-bold text-lg shadow-md transition-all flex items-center justify-center gap-2"
               >
                 Proceed to Checkout
                 <ChevronRight size={20} />
@@ -322,26 +459,200 @@ function MainApp() {
           </div>
         </div>
       </div>
+
+      {/* Save Build Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-slate-900">Save Build</h3>
+              <button onClick={() => setShowSaveModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={24} />
+              </button>
+            </div>
+            <p className="text-slate-500 mb-4">Give your build a name to save it for later.</p>
+            {saveError && (
+              <p className="text-red-500 text-sm mb-4">{saveError}</p>
+            )}
+            <input
+              type="text"
+              value={buildName}
+              onChange={(e) => setBuildName(e.target.value)}
+              placeholder="e.g., My Gaming Rig"
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="flex-1 py-3 border border-slate-200 rounded-lg font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveBuild}
+                disabled={saving || !buildName.trim()}
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
   const renderCheckout = () => (
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <button onClick={() => setStep('config')} className="flex items-center text-slate-500 hover:text-blue-600 mb-6 transition-colors">
+        <ArrowLeft size={18} className="mr-1" /> Back to Configuration
+      </button>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Shipping Form */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 className="text-2xl font-bold text-slate-900 mb-6">Shipping Details</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Street Address</label>
+              <input
+                type="text"
+                value={checkoutForm.street}
+                onChange={(e) => setCheckoutForm(prev => ({ ...prev, street: e.target.value }))}
+                placeholder="123 Main Street, Apt 4B"
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">City</label>
+                <input
+                  type="text"
+                  value={checkoutForm.city}
+                  onChange={(e) => setCheckoutForm(prev => ({ ...prev, city: e.target.value }))}
+                  placeholder="Mumbai"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">State</label>
+                <input
+                  type="text"
+                  value={checkoutForm.state}
+                  onChange={(e) => setCheckoutForm(prev => ({ ...prev, state: e.target.value }))}
+                  placeholder="Maharashtra"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Pincode</label>
+                <input
+                  type="text"
+                  value={checkoutForm.pincode}
+                  onChange={(e) => setCheckoutForm(prev => ({ ...prev, pincode: e.target.value }))}
+                  placeholder="400001"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Phone</label>
+                <input
+                  type="tel"
+                  value={checkoutForm.phone}
+                  onChange={(e) => setCheckoutForm(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="+91 98765 43210"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Order Summary */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="p-6 bg-slate-900 text-white">
+            <h3 className="font-bold text-lg">Order Summary</h3>
+          </div>
+          <div className="p-6">
+            <p className="text-slate-600 mb-4">{selectedTier?.name}</p>
+            <div className="space-y-2 text-sm">
+              {currentBuild.map((comp, idx) => (
+                <div key={idx} className="flex justify-between text-slate-600">
+                  <span>{comp.type}</span>
+                  <span className="text-slate-900">₹{comp.price.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+            <div className="h-px bg-slate-200 my-4"></div>
+            <div className="flex justify-between text-sm text-slate-600 mb-2">
+              <span>Assembly</span>
+              <span>₹{ASSEMBLY_FEE}</span>
+            </div>
+            <div className="flex justify-between text-sm text-slate-600 mb-4">
+              <span>GST (18%)</span>
+              <span>₹{pricing.gst.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-end border-t border-slate-200 pt-4">
+              <span className="font-bold text-slate-900">Total</span>
+              <span className="text-2xl font-bold text-blue-600">₹{pricing.total.toLocaleString()}</span>
+            </div>
+
+            <button
+              onClick={handlePlaceOrder}
+              disabled={ordering}
+              className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white py-4 rounded-lg font-bold text-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {ordering ? (
+                <><Loader2 className="animate-spin" size={20} /> Placing Order...</>
+              ) : (
+                <>Place Order</>
+              )}
+            </button>
+
+            <p className="text-xs text-center text-slate-400 mt-4">
+              Payment will be collected on delivery
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderSuccess = () => (
     <div className="flex items-center justify-center min-h-[60vh] px-4 animate-fade-in">
       <div className="text-center max-w-lg">
         <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-          <Truck size={40} />
+          <CheckCircle2 size={40} />
         </div>
-        <h2 className="text-3xl font-bold text-slate-900 mb-4">Ready to Ship!</h2>
-        <p className="text-slate-600 mb-8">
-          This is a demo application. In a real scenario, you would be redirected to a payment gateway for
-          <span className="font-bold text-slate-900"> ₹{pricing.total.toLocaleString()}</span>.
+        <h2 className="text-3xl font-bold text-slate-900 mb-4">Order Placed Successfully!</h2>
+        <p className="text-slate-600 mb-2">
+          Your order <span className="font-bold text-slate-900">{orderSuccess?.orderRef}</span> has been placed.
         </p>
-        <button
-          onClick={() => setStep('home')}
-          className="bg-slate-900 text-white px-8 py-3 rounded-lg font-medium hover:bg-slate-800 transition-colors"
-        >
-          Back to Home
-        </button>
+        <p className="text-slate-500 mb-8">
+          You will receive updates on your email. Track your order in My Orders.
+        </p>
+        <div className="flex gap-4 justify-center">
+          <button
+            onClick={() => navigate('/my-orders')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            Track Order
+          </button>
+          <button
+            onClick={() => {
+              setStep('home');
+              setSelectedTier(null);
+              setOrderSuccess(null);
+            }}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            Back to Home
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -369,6 +680,47 @@ function MainApp() {
               <ShoppingCart size={24} />
               {step === 'config' && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
             </button>
+
+            {/* User Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2 p-2 text-slate-600 hover:text-blue-600 transition-colors"
+              >
+                <User size={24} />
+                <span className="hidden sm:block text-sm font-medium">{userData?.name || 'Account'}</span>
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden z-50">
+                  <div className="p-3 border-b border-slate-100">
+                    <p className="text-sm font-medium text-slate-900">{userData?.name}</p>
+                    <p className="text-xs text-slate-500">{user?.email}</p>
+                  </div>
+                  <div className="p-2">
+                    <button
+                      onClick={() => { setShowUserMenu(false); navigate('/my-builds'); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                    >
+                      <FolderOpen size={16} /> My Builds
+                    </button>
+                    <button
+                      onClick={() => { setShowUserMenu(false); navigate('/my-orders'); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                    >
+                      <ClipboardList size={16} /> My Orders
+                    </button>
+                    <div className="h-px bg-slate-100 my-2"></div>
+                    <button
+                      onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <LogOut size={16} /> Log Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -378,6 +730,7 @@ function MainApp() {
         {step === 'budget' && renderBudget()}
         {step === 'config' && renderConfig()}
         {step === 'checkout' && renderCheckout()}
+        {step === 'success' && renderSuccess()}
       </main>
 
       <footer className="bg-white border-t border-slate-200 py-8 mt-auto">
@@ -394,6 +747,16 @@ function App() {
     <Routes>
       <Route path="/login" element={<SignIn />} />
       <Route path="/signup" element={<SignUp />} />
+      <Route path="/my-builds" element={
+        <ProtectedRoute>
+          <MyBuilds />
+        </ProtectedRoute>
+      } />
+      <Route path="/my-orders" element={
+        <ProtectedRoute>
+          <MyOrders />
+        </ProtectedRoute>
+      } />
       <Route path="/*" element={
         <ProtectedRoute>
           <MainApp />
