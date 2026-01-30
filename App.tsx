@@ -4,7 +4,9 @@ import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import MyBuilds from './pages/MyBuilds';
 import MyOrders from './pages/MyOrders';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import { useAuth } from './context/AuthContext';
 import { saveBuild } from './services/buildsService';
 import { createOrder, Address } from './services/ordersService';
@@ -756,6 +758,11 @@ function App() {
         <ProtectedRoute>
           <MyOrders />
         </ProtectedRoute>
+      } />
+      <Route path="/admin" element={
+        <AdminRoute>
+          <AdminDashboard />
+        </AdminRoute>
       } />
       <Route path="/*" element={
         <ProtectedRoute>
